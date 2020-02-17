@@ -1,0 +1,131 @@
+---
+title: "Predicting Student Test Scores"
+author: "Braden Baker"
+date: "12/22/2019"
+output: github_document
+---
+
+The student performance dataset has many coloumns listed as character data types that are really factors. There is also some coloumn names with spaces that are renamed to work better with R. The total score variable is also created as a coloumn to see a quick view of a students overall performance in one column.
+```{r}
+library(tidyverse)
+library(openintro)
+library(readr)
+StudentsPerformance <- read_csv("StudentsPerformance.csv")
+
+str(StudentsPerformance)
+head(StudentsPerformance)
+data <- StudentsPerformance
+
+data <- rename(data, race_eth = 'race/ethnicity')
+data <- rename(data, parenteduc = 'parental level of education')
+data <- rename(data, test_prep = 'test preparation course')
+data <- rename(data, math_score = 'math score')
+data <- rename(data, reading_score = 'reading score')
+data <- rename(data, writing_score = 'writing score')
+
+
+data$gender <- as.factor(data$gender)
+data$race_eth <- as.factor(data$race_eth)
+data$parenteduc <- as.factor(data$parenteduc)
+data$test_prep <- as.factor(data$test_prep)
+data$lunch <- as.factor(data$lunch)
+
+data <- data %>%
+  mutate(totalscore =math_score+reading_score+writing_score)
+
+str(data)
+```
+There is a clear divide between the score on each test and gender. Males tended to have a higher math score and a lower reading and writing score than females.
+```{r}
+
+ggplot(data, aes(x=totalscore, y=math_score, color=gender)) + geom_point(alpha=0.5)
+ggplot(data, aes(x=totalscore, y=reading_score, color=gender)) + geom_point(alpha=0.5)
+ggplot(data, aes(x=totalscore, y=writing_score, color=gender)) + geom_point(alpha=0.5)
+
+```
+
+Looking at the data, female students averaged more points than males in all but math score.
+
+```{r}
+genderresults <- data %>%
+  group_by(gender) %>%
+  summarise(mavg=mean(math_score), ravg=mean(reading_score), wavg=mean(writing_score), tavg=mean(totalscore))
+
+genderresults
+
+```
+
+The rest of the data shows that a majority of the other variables in the dataset are fairly even in both genders. Showing that there is not any other obvious variable that could explain why females are getting such higher scores in this dataset.
+
+```{r}
+ggplot(data, aes(x=gender, fill=test_prep)) + geom_bar(position = 'dodge')
+ggplot(data, aes(x=gender, fill=lunch)) + geom_bar(position = 'dodge')
+ggplot(data, aes(x=gender, fill=parenteduc)) + geom_bar(position = 'dodge')
+
+```
+
+The only clear difference is in race and ethnicity. Females had a much higher number of students that fell under racial group C than males. Racial group C is the median average total score, likely bringing the female score up. The males also had a higher number of students in racial group A, which has the lowest average score, likely bringing their score down.
+
+```{r}
+ggplot(data, aes(x=gender, fill=race_eth)) + geom_bar(position = 'dodge')
+
+ggplot(data, aes(x=race_eth, y=totalscore)) + geom_boxplot()
+
+```
+
+Looking at the lunch variable, there appears to be some correlation between lunch and higher test scores.
+
+```{r}
+ggplot(data, aes(x=totalscore, y=math_score, color=lunch)) + geom_point(alpha=0.5)
+ggplot(data, aes(x=totalscore, y=reading_score, color=lunch)) + geom_point(alpha=0.5)
+ggplot(data, aes(x=totalscore, y=writing_score, color=lunch)) + geom_point(alpha=0.5)
+
+```
+
+When only using those below or above one standard deviation it becomes clear that a majority of the best students are ones with standard lunch. Along with the lower scores still being a mix of students with standard or free/reduced lunch. 
+
+```{r}
+
+lunchdata <- data %>%
+  group_by(lunch) %>%
+  summarize(mavg=mean(math_score), ravg=mean(reading_score), wavg=mean(writing_score), tavg=mean(totalscore))
+
+sd(data$totalscore)
+mean(data$totalscore)
+
+lunchdatagraph <- data %>%
+  group_by(lunch) %>%
+  filter(totalscore < 161 | totalscore > 245)
+
+ggplot(lunchdatagraph, aes(x=totalscore, y=math_score, color=lunch)) + geom_point(alpha=0.5)
+ggplot(lunchdatagraph, aes(x=totalscore, y=reading_score, color=lunch)) + geom_point(alpha=0.5)
+ggplot(lunchdatagraph, aes(x=totalscore, y=writing_score, color=lunch)) + geom_point(alpha=0.5)
+```
+
+Using linear regression to predict total score, gender and lunch were used, along with writing score because it had the largest difference in average score, between male and female compared to the other tests. Which resulted in an accurate model with an R-squared of 0.9635.
+
+```{r}
+
+dataforreg <- data
+
+nrows = nrow(data)
+
+set.seed(999)
+
+rows <- sample(nrows)
+dataforreg = dataforreg[rows,]
+split <- round(nrow(dataforreg) * .70)
+train = dataforreg[1:split,]
+test = dataforreg[(split+1):nrows,]
+
+mod1 <- lm(totalscore ~ gender+writing_score+lunch, data=train)
+summary(mod1)
+
+pred1 <- predict(mod1, newdata = test)
+result <- cbind(test$totalscore, pred1)
+
+plot(result)
+
+
+```
+
